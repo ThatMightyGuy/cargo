@@ -1,4 +1,4 @@
-# cargo
+# cc-cargos
 
 ### computercraft warehouse suite
 
