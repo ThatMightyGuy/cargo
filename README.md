@@ -1,6 +1,6 @@
 # cargo
 
-## computercraft warehouse suite
+### computercraft warehouse suite
 
 ## features
 
