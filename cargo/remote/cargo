@@ -1,0 +1,36 @@
+r = rednet
+function main()
+  r.open("back")
+  term.clear()
+  term.setCursorPos(1, 1)
+  local server = 0
+  if fs.exists("/.cargo") then
+    file = fs.open("/.cargo", "r")
+    server = tonumber(file.readAll())
+  else
+    print("Enter server computer id")
+    server = tonumber(io.read())
+    file = fs.open("/.cargo", "w")
+    file.write(server)
+  end
+  file.close()
+  r.send(server, "CTRL", "dev-connect")
+  while true do
+    event, senderId, message, protocol = os.pullEvent("rednet_message")
+    print(message)
+    if not (protocol == "control-midtr") then
+      cmd = io.read()
+      if cmd == "recon" then
+        r.send(server, "CTRL", "dev-connect")
+      elseif cmd == "exit" then
+        return
+      elseif cmd == "newcon" then
+        fs.delete("/.cargo")
+        return
+      else
+        r.send(server, cmd, "control")
+      end
+    end
+  end
+end
+main()

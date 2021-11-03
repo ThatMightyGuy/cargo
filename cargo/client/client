@@ -1,0 +1,238 @@
+t = turtle
+r = rednet
+host = 0
+x = 0
+y = 0
+z = 0
+homex = 0
+homey = 0
+homez = 0
+face = 0
+busy = false
+config = {...}
+
+function getLines(file)
+  output = {}
+  while true do
+    local line = file.readLine()
+    if line == nil then
+      break
+    end
+    table.insert(output, line)
+  end
+  return output
+end
+
+function readCfg()
+  local file = fs.open("/.cargoclient", "r")
+  for k, line in pairs(getLines(file)) do
+    local cfg = {}
+    for arg in line:gmatch("%S+") do
+      table.insert(cfg, arg)
+    end
+    config[cfg[1]] = cfg[2]
+  end
+  file.close()
+end
+
+ -- Movement
+
+function forward()
+  local res = t.forward()
+  if res then
+    if face == 0 then
+      y = y + 1
+    elseif face == 1 then
+      x = x + 1
+    elseif face == 2 then
+      y = y - 1
+    else
+      x = x - 1
+    end
+  end
+  return res
+end
+
+function turnLeft()
+  t.turnLeft()
+  if face == 0 then
+    face = 3
+  else
+    face = face - 1
+  end
+end
+
+function turnRight()
+  t.turnRight()
+  if face == 3 then
+    face = 0
+  else
+    face = face + 1
+  end
+end
+
+function up()
+  local res = t.up()
+  if res then
+    z = z + 1
+  end
+  return res
+end
+
+function down()
+  local res = t.down()
+  if res then
+    z = z - 1
+  end
+  return res
+end
+
+function getDistance(layer, offset, cz)
+  return math.abs(layer - z) + math.abs(offset - y) + math.abs(cz - z)
+end
+
+function goToCoords(layer, offset, row)
+  while not (row == x) do
+    while not (z == -1) do
+      down()
+    end
+    local side
+    if(row > x) then
+      side = 1
+    else
+      side = 3
+    end
+    while not (face == side) do
+      turnRight()
+    end
+    forward()
+  end
+  while not (offset == y) do
+    local req
+    if offset > y then
+      req = 0
+    else
+      req = 2
+    end
+    while not (face == req) do
+      turnRight()
+    end
+    forward()
+  end
+  while not (layer == z) do
+    if layer > z then
+      up()
+    else
+      down()
+    end
+  end
+  print("Reached ["..y.."; "..z.."]")
+end
+
+ -- Item operations
+
+function getItem(layer, offset, cz, side, count)
+  busy = true
+  goToCoords(layer, offset, cz)
+  while not (face == side) do
+    turnRight()
+  end
+  local items = count % 64
+  local stacks = (count - items) / 64
+  local i = 1
+  for i = 1, stacks do
+    t.select(i)
+    t.suck()
+  end
+  if items > 0 then
+    t.select(i + 1)
+    t.suck(items)
+  end
+  goToCoords(homez, homey, homez)
+  while not (face == 2) do
+    turnRight()
+  end
+  for i = 1, 16 do
+    t.select(i)
+    t.drop()
+  end
+  busy = false
+end
+
+function putItem(layer, offset, cz, side)
+  busy = true
+  goToCoords(homez, homey, homez)
+  while not (face == 2) do
+    turnRight()
+  end
+  for i = 1, 16 do
+    t.select(i)
+    t.suck()
+  end
+  goToCoords(layer, offset, cz)
+  while not (face == side) do
+    turnRight()
+  end
+  for i = 1, 16 do
+    t.select(i)
+    t.drop()
+  end
+  goToCoords(homez, homey, homez)
+  busy = false
+end
+
+-- whatever
+
+function handleMsgs(e, sid, msg, prot)
+  print("["..prot.."] "..sid..": "..msg)
+  if msg == "OWN" and prot == "meta-events" then
+    host = sid
+    print("Our host is now "..host)
+    r.send(host, "ACK", "meta-events")
+  elseif prot == "eval-dist" and sid == host and not busy then
+    local coords = {}
+    for arg in string.gmatch(msg, "%S+") do table.insert(coords, tonumber(arg)) end
+    local dist = getDistance(coords[1], coords[2], coords[3])
+    print("Evaluated dist to ["..coords[1].."; "..coords[2].."]: "..dist)
+    r.send(host, dist, prot)
+  elseif prot == "get-item" and sid == host and not busy then
+    local coords = {}
+    for arg in string.gmatch(msg, "%S+") do table.insert(coords, tonumber(arg)) end
+    print("Getting "..coords[5].." from layer "..coords[1].." offset "..coords[2].." side "..coords[4].." row "..coords[3])
+    getItem(coords[1], coords[2], coords[3], coords[4], coords[5])
+  elseif prot == "put-item" and sid == host and not busy then
+    local coords = {}
+    for arg in string.gmatch(msg, "%S+") do table.insert(coords, tonumber(arg)) end
+    print("Putting into layer "..coords[1].." offset "..coords[2].." side "..coords[4].." row "..coords[3])
+    putItem(coords[1], coords[2], coords[3], coords[4])
+  elseif prot == "move-home" and sid == host then
+    local coords = {}
+    for arg in string.gmatch(msg, "%S+") do table.insert(coords, tonumber(arg)) end
+    homex = coords[3]
+    homey = coords[1]
+    homez = coords[2]
+    goToCoords(homez, homey)
+  elseif prot == "get-info" and msg == "HOME" then
+    r.send(host, homey.." "..homez.." "..homex, prot)
+  elseif prot == "reset-coords" then
+    local coords = {}
+    for arg in string.gmatch(msg, "%S+") do table.insert(coords, tonumber(arg)) end
+    face = coords[4]
+    x = coords[3]
+    y = coords[1]
+    z = coords[2]
+  elseif busy then
+    r.send(host, "BUSY", "meta-events")
+  else
+    r.send(host, "RDY", "meta-events")
+  end
+end
+
+function main()
+  r.open("left")
+  while true do -- Start event loop
+    event, senderId, message, protocol = os.pullEvent("rednet_message")
+    handleMsgs(event, senderId, message, protocol)
+  end
+end
+main()

@@ -1,0 +1,191 @@
+clients = {}
+r = rednet
+smallestTgtDist = 999999
+bestClientId = 0
+config = {...}
+warehouse_structure = {...}
+
+function getLines(file)
+  output = {}
+  while true do
+    local line = file.readLine()
+    if line == nil then
+      break
+    end
+    table.insert(output, line)
+  end
+  return output
+end
+function readCfg()
+  local file = fs.open("/.cargosrv", "r")
+  for k, line in pairs(getLines(file)) do
+    local cfg = {}
+    for arg in line:gmatch("%S+") do
+      table.insert(cfg, arg)
+    end
+    config[cfg[1]] = cfg[2]
+  end
+  file.close()
+end
+
+function buildWarehouse()
+  local file = fs.open(config["warehouse_structure"], "r")
+  for k, line in pairs(getLines(file)) do
+    local barrel = {}
+    local key
+    for arg in line:gmatch("%S+") do
+      local coord = tonumber(arg)
+      if not (coord == nil) then
+        table.insert(barrel, coord)
+      else
+        key = arg
+      end
+    end
+    if not (key == "#") then
+      warehouse_structure[key] = barrel
+    end
+  end
+  file.close()
+end
+
+function getItem(sid, y, z, x, face, count)
+  smallestTgtDist = 999999
+  broadcastClients(y.." "..z.." "..x, "eval-dist")
+  r.send(sid, "Turtle dispatched", "control")
+  r.send(bestClientId, y.." "..z.." "..x.." "..face.." "..count, "get-item")
+end
+
+function putItem(sid, y, z, x, face)
+  smallestTgtDist = 999999
+  broadcastClients(y.." "..z.." "..x, "eval-dist")
+  r.send(sid, "Turtle dispatched", "control")
+  r.send(bestClientId, y.." "..z.." "..x.." "..face, "put-item")
+end
+
+function processCommand(cmd, sid)
+  local arglist = {}
+  for arg in cmd:gmatch("%S+") do
+    table.insert(arglist, arg)
+  end
+  if arglist[1] == "getcoords" then
+    getItem(sid, arglist[2], arglist[3], arglist[4], arglist[5], arglist[6])
+  elseif arglist[1] == "putcoords" then
+    putItem(sid, arglist[2], arglist[3], arglist[4], arglist[5])
+  elseif arglist[1] == "clients" then
+    for i, v in pairs(clients) do
+      print(i..": turtle "..clients[i])
+      r.send(sid, i..": turtle "..clients[i], "control")
+    end
+  elseif arglist[1] == "uclients" then
+    print("Updating clients list")
+    r.send(sid, "Updating clients list", "control")
+    clients = {}
+    r.broadcast("OWN", "meta-events")
+  elseif arglist[1] == "movehome" then
+    r.send(tonumber(arglist[2]), arglist[3].." "..arglist[4].." "..arglist[5], "move-home")
+    r.send(sid, "Turtle "..arglist[2].."'s new home is ["..arglist[3].."; "..arglist[4].."; "..arglist[5].."]", "control")
+    print("Turtle "..arglist[2].."'s new home is ["..arglist[3].."; "..arglist[4].."; "..arglist[5].."]")
+  elseif arglist[1] == "resetcoords" then
+    r.send(tonumber(arglist[2]), arglist[3].." "..arglist[4].." "..arglist[5].." "..arglist[6], "reset-coords")
+    r.send(sid, "Turtle "..arglist[2].." coordinate system reset", "control")
+    print("Turtle "..arglist[2].." coordinate system reset")
+  elseif arglist[1] == "get" then
+    local barrel = warehouse_structure[arglist[2]]
+    if barrel == nil then
+      r.send(sid, "Item not found in system", "control")
+    else
+      getItem(sid, barrel[1], barrel[2], barrel[3], barrel[4], arglist[3])
+      r.send(sid, "Turtle dispatched", "control")
+    end
+  elseif arglist[1] == "put" then
+    local barrel = warehouse_structure[arglist[2]]
+    if barrel == nil then
+      r.send(sid, "Item not found in system", "control")
+    else
+      putItem(sid, barrel[1], barrel[2], barrel[3], barrel[4])
+      r.send(sid, "Turtle dispatched", "control")
+    end
+  elseif arglist[1] == "addb" then
+    if warehouse_structure[arglist[2]] == nil then
+      warehouse_structure[arglist[2]] = {tonumber(arglist[3]), tonumber(arglist[4]), tonumber(arglist[5]), tonumber(arglist[6])}
+      local file = fs.open(config["warehouse_structure"], "a")
+      file.write(arglist[2].." "..arglist[3].." "..arglist[4].." "..arglist[5].." "..arglist[6].."\n")
+      file.close()
+      r.send(sid, "Item added succesfully", "control")
+      print("Item added succesfully")
+    else
+      r.send(sid, "Item already exists in system", "control")
+      print("Item already exists in system")
+    end
+  elseif arglist[1] == "listb" then
+    local l = 0
+    local s = "Barrels list:"
+    for k, b in pairs(warehouse_structure) do
+      if l < 15 then
+        s = s.."\n"..k
+        l = l + 1
+      else
+        l = 0
+        print("[NEXT]")
+        r.send(sid, "[NEXT]", "control-midtr")
+      end
+    end
+    print(s)
+    r.send(sid, s, "control")
+  elseif arglist[1] == "help" then
+    if arglist[2] == "cargo" then
+      print("cargo (cargoremote) overhead:\n  recon - reconnect to server\n  exit - poof!\ncargo config file: @cargoremote/.cargo - last connected server id")
+      r.send(sid, "cargo (cargoremote) overhead:\n  recon - reconnect to server\n  exit - poof!\ncargo config file: @cargoremote/.cargo - last connected server id", "control")
+    elseif arglist[2] == "cargosrv" then
+      print("cargosrv usage:\n  getcoords uid y z x face count - get from coords\n  putcoords uid y z x face - put to coords\n  clients - client list\n  uclients - update client list (reconnect)\n  movehome uid y z x - move client home location\n  resetcoords uid y z x face - set client coords\n  get item count - get from barrel\n  put item - put to barrel\n  addb item y z x face - add db entry for item barrel")
+      r.send(sid, "cargosrv usage:\n  getcoords uid y z x face count - get from coords\n  putcoords uid y z x face - put to coords\n  clients - client list\n  uclients - update client list (reconnect)\n  movehome uid y z x - move client home location\n  resetcoords uid y z x face - set client coords\n  get item count - get from barrel\n  put item - put to barrel\n  addb item y z x face - add db entry for item barrel", "control")
+    elseif arglist[2] == "client" then
+      print("cargoclient config file: @cargoclient/.cargoclient")
+      r.send(sid, "cargoclient config file: @cargoclient/.cargoclient", "control")
+    else
+      print("help topics: cargo/cargosrv/client\ncargosrv usage:\n  getcoords uid y z x face count - get from coords\n  putcoords uid y z x face - put to coords\n  clients - client list\n  uclients - update client list (reconnect)\n  movehome uid y z x - move client home location\n  resetcoords uid y z x face - set client coords\n  get item count - get from barrel\n  put item - put to barrel\n  addb item y z x face - add db entry for item barrel\ncargo (cargosrv remote) overhead:\n  recon - reconnect to server\n  exit - poof!\ncargo config files:\n  @cargosrv/.cargosrv - cargosrv main config file\n  @cargosrv/.cargostructure - item barrel database\n  @cargoremote/.cargo - last connected server id\n  @cargoclient/.cargoclient - cargoclient main config file")
+      r.send(sid, "help topics: cargo/cargosrv/client\ncargosrv usage:\n  getcoords uid y z x face count - get from coords\n  putcoords uid y z x face - put to coords\n  clients - client list\n  uclients - update client list (reconnect)\n  movehome uid y z x - move client home location\n  resetcoords uid y z x face - set client coords\n  get item count - get from barrel\n  put item - put to barrel\n  addb item y z x face - add db entry for item barrel\ncargo (cargosrv remote) overhead:\n  recon - reconnect to server\n  exit - poof!\ncargo config files:\n  @cargosrv/.cargosrv - cargosrv main config file\n  @cargosrv/.cargostructure - item barrel database\n  @cargoremote/.cargo - last connected server id\n  @cargoclient/.cargoclient - cargoclient main config file", "control")
+    end
+  else
+    print("Unknown command: "..arglist[1])
+    r.send(sid, "Unknown command: "..arglist[1], "control")
+  end
+end
+
+function broadcastClients(msg, prot)
+  for i, v in pairs(clients) do
+    r.send(clients[i], msg, prot)
+  end
+end
+
+function handleMsgs(sid, msg, prot)
+  print("["..prot.."] "..sid..": "..msg)
+  if msg == "ACK" and prot == "meta-events" then
+    print("Added client id "..sid)
+    table.insert(clients, sid)
+  elseif prot == "eval-dist" then
+    print("Turtle "..sid.." reports distance "..msg)
+    local dist = tonumber(msg)
+    if dist < smallestTgtDist then
+      smallestTgtDist = dist
+      bestClientId = sid
+    end
+  elseif prot == "control" then
+    processCommand(msg, sid)
+  elseif prot == "dev-connect" and msg == "CTRL" then
+    print("Device "..sid.." connected as terminal")
+    r.send(sid, "Connected", "control")
+  end
+end
+
+function main()
+  readCfg()
+  r.open(config["modem"])
+  r.broadcast("OWN", "meta-events")
+  buildWarehouse()
+  while true do
+    event, senderId, message, protocol = os.pullEvent("rednet_message")
+    handleMsgs(senderId, message, protocol)
+  end
+end
+main()
