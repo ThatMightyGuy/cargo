@@ -29,7 +29,7 @@
 
 `addb item y z x face` - add db entry for item
 
-`help \[cargosrv/turtle/cargo\]` - show help for $topic, shows all if not specified, probably won't fit on your screen
+`help [cargosrv/turtle/cargo]` - show help for $topic, shows all if not specified, probably won't fit on your screen
 
 ### cargo remote command overhead
 
