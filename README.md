@@ -41,6 +41,8 @@
 
 `recon` - reconnect to server
 
+`newcon` - reset .cargo and exit, thus allowing you to connect to a different server
+
 `exit` - poof!
 
 
@@ -54,4 +56,8 @@
 
 `@cargoclient/.cargoclient` - persistent client data, such as home location etc.
 
+## first-time setup
 
+`@cargoserver$ edit .cargosrv` and update modem location (statefile not yet implemented)
+
+included `@cargoserver/.cargostructure` is my current warehouse setup. it won't fit you, so i advise you to remove all entries and add them yourself, either manually or by using the `addb` command ~~or cope~~
