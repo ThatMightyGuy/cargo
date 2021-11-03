@@ -19,9 +19,9 @@
 
 `uclients` - update client list (reconnect to turtles)
 
-`get-coords y z x face count` - fetch from these coordinates, from that side (not intended for users because it's harder to use)
+`getcoords y z x face count` - fetch from these coordinates, from that side (not intended for users because it's harder to use)
 
-`put-coords y z x face` - put items there (not intended for users because it's harder to use)
+`putcoords y z x face` - put items there (not intended for users because it's harder to use)
 
 `get item count` - check db for item, then run `get-coords` on it
 
@@ -29,7 +29,13 @@
 
 `addb item y z x face` - add db entry for item
 
+`listb` - show valid item names
+
 `help [cargosrv/turtle/cargo]` - show help for $topic, shows all if not specified, probably won't fit on your screen
+
+`movehome sid y z x` - moves turtle home position
+
+`resetcoords sid y z x face` - sets turtle current coordinates and direction, in case something breaks
 
 ### cargo remote command overhead
 
@@ -42,10 +48,10 @@
 
 `@cargosrv/.cargosrv` - main config file for server
 
-`@cargosrv/.warehouse_structure` - item database
+`@cargosrv/.cargostructure` - item database
 
 `@cargoremote/.cargo` - last connected sid
 
-`@cargoclient/.client` - persistent client data, such as home location etc.
+`@cargoclient/.cargoclient` - persistent client data, such as home location etc.
 
 
