@@ -61,3 +61,12 @@
 `@cargoserver$ edit .cargosrv` and update modem location (statefile not yet implemented)
 
 included `@cargoserver/.cargostructure` is my current warehouse setup. it won't fit you, so i advise you to remove all entries and add them yourself, either manually or by using the `addb` command ~~or cope~~
+
+## todo
+
+* statefile support for automatic system restart
+* working around multiple turtles, because this is *not* tested so far, so it probably doesn't work.
+* a way of automatic refuelling
+* opencomputers server code with computercraft interop support
+* better `put` implementation
+* making it less painful to setup
